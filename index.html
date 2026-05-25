@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview Question Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+
+  <div class="w-full max-w-xl bg-white rounded-2xl shadow-md p-8">
+
+    <!-- Header -->
+    <h1 class="text-2xl font-bold text-gray-800 mb-1">Interview Question Generator</h1>
+    <p class="text-sm text-gray-500 mb-6">Enter a job title to generate 3 thoughtful interview questions using AI.</p>
+
+    <!-- Input -->
+    <div class="mb-4">
+      <label for="jobTitle" class="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+      <input
+        id="jobTitle"
+        type="text"
+        placeholder="e.g. Customer Success Manager"
+        class="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      />
+    </div>
+
+    <!-- Submit Button -->
+    <button
+      id="generateBtn"
+      onclick="generateQuestions()"
+      class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200"
+    >
+      Generate Questions
+    </button>
+
+    <!-- Loading State -->
+    <div id="loading" class="hidden mt-6 flex items-center gap-2 text-blue-600">
+      <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+      <span class="text-sm font-medium">Generating questions, please wait...</span>
+    </div>
+
+    <!-- Error Message -->
+    <div id="errorMsg" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600"></div>
+
+    <!-- Results -->
+    <div id="results" class="hidden mt-6">
+      <h2 id="resultsTitle" class="text-lg font-semibold text-gray-700 mb-3"></h2>
+      <ol id="questionList" class="space-y-3 list-none"></ol>
+    </div>
+
+  </div>
+
+  <script>
+    // ── CONFIG ────────────────────────────────────────────────────────────────
+    // Replace with your Gemini API key from https://ai.google.dev
+    const GEMINI_API_KEY = "AIzaSyCVriLo64bJPdBf4DHJcdPNOM_uWa0tWUc";
+    const GEMINI_MODEL   = "gemini-1.5-flash";
+    const API_URL        = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+    // ── MAIN FUNCTION ─────────────────────────────────────────────────────────
+    async function generateQuestions() {
+      const jobTitle  = document.getElementById("jobTitle").value.trim();
+      const loading   = document.getElementById("loading");
+      const results   = document.getElementById("results");
+      const errorMsg  = document.getElementById("errorMsg");
+      const btn       = document.getElementById("generateBtn");
+
+      // Validate input
+      if (!jobTitle) {
+        showError("Please enter a job title before generating questions.");
+        return;
+      }
+
+      // Reset UI
+      results.classList.add("hidden");
+      errorMsg.classList.add("hidden");
+      loading.classList.remove("hidden");
+      btn.disabled = true;
+      btn.classList.add("opacity-50", "cursor-not-allowed");
+
+      // Build prompt
+      const prompt = `You are an expert interviewer and talent specialist.
+Generate exactly 3 thoughtful, role-specific interview questions for the position of "${jobTitle}".
+
+Requirements:
+- Each question should reveal meaningful insight about the candidate's skills, mindset, or experience relevant to this specific role
+- Questions should be open-ended and behavioural or situational in nature
+- Do not include generic questions like "Tell me about yourself"
+- Format your response as a numbered list: 1. ... 2. ... 3. ...
+- Return only the 3 questions, nothing else`;
+
+      try {
+        // Call Gemini API
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData?.error?.message || `API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!rawText) throw new Error("No response received from the AI. Please try again.");
+
+        // Parse the numbered questions
+        const questions = parseQuestions(rawText);
+        if (questions.length === 0) throw new Error("Could not parse questions from AI response. Please try again.");
+
+        displayResults(jobTitle, questions);
+
+      } catch (err) {
+        showError(err.message || "Something went wrong. Please check your API key and try again.");
+      } finally {
+        loading.classList.add("hidden");
+        btn.disabled = false;
+        btn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    }
+
+    // ── PARSE QUESTIONS ───────────────────────────────────────────────────────
+    function parseQuestions(text) {
+      // Split on numbered list pattern: 1. 2. 3.
+      const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+      const questions = [];
+
+      for (const line of lines) {
+        // Match lines starting with 1. 2. 3. etc.
+        const match = line.match(/^\d+\.\s+(.+)/);
+        if (match) questions.push(match[1].trim());
+      }
+
+      return questions;
+    }
+
+    // ── DISPLAY RESULTS ───────────────────────────────────────────────────────
+    function displayResults(jobTitle, questions) {
+      const results      = document.getElementById("results");
+      const resultsTitle = document.getElementById("resultsTitle");
+      const questionList = document.getElementById("questionList");
+
+      resultsTitle.textContent = `Interview Questions for: ${jobTitle}`;
+      questionList.innerHTML   = "";
+
+      questions.forEach((q, i) => {
+        const li = document.createElement("li");
+        li.className = "flex gap-3 p-4 bg-blue-50 border border-blue-100 rounded-lg";
+        li.innerHTML = `
+          <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">${i + 1}</span>
+          <p class="text-gray-700 text-sm leading-relaxed">${q}</p>
+        `;
+        questionList.appendChild(li);
+      });
+
+      results.classList.remove("hidden");
+    }
+
+    // ── ERROR HANDLING ────────────────────────────────────────────────────────
+    function showError(message) {
+      const errorMsg = document.getElementById("errorMsg");
+      errorMsg.textContent = message;
+      errorMsg.classList.remove("hidden");
+    }
+
+    // ── ENTER KEY SUPPORT ─────────────────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("jobTitle").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") generateQuestions();
+      });
+    });
+  </script>
+
+</body>
+</html>
