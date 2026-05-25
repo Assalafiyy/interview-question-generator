@@ -56,10 +56,10 @@
 
   <script>
     // ── CONFIG ────────────────────────────────────────────────────────────────
-    // Replace with your Gemini API key from https://ai.google.dev
-    const GEMINI_API_KEY = "AIzaSyDgRIl9LZSvkSkM9jYTqWGupfytZDnbV14";
-    const GEMINI_MODEL   = "gemini-2.0-flash";
-    const API_URL        = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    // API key
+const GROQ_API_KEY = "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";
+const GROQ_MODEL   = "llama-3.3-70b-versatile";
+const API_URL      = "https://api.groq.com/openai/v1/chat/completions";${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
     // ── MAIN FUNCTION ─────────────────────────────────────────────────────────
     async function generateQuestions() {
@@ -94,15 +94,20 @@ Requirements:
 - Return only the 3 questions, nothing else`;
 
       try {
-        // Call Gemini API
-        const response = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
-          })
-        });
+        // Call API
+const response = await fetch(API_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${GROQ_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: GROQ_MODEL,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.7,
+    max_tokens: 512
+  })
+});
 
         if (!response.ok) {
           const errData = await response.json();
@@ -110,7 +115,7 @@ Requirements:
         }
 
         const data = await response.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const rawText = data?.choices?.[0]?.message?.content;
 
         if (!rawText) throw new Error("No response received from the AI. Please try again.");
 
